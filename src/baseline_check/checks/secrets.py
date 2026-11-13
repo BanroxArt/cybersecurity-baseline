@@ -3,12 +3,17 @@
 This is a fast first pass, not a replacement for gitleaks or GitHub secret
 scanning. It only reads the working tree, so a secret that was committed and
 then deleted is invisible here. Run a history scanner as well.
+
+Findings carry a keyed fingerprint (see ``findings.FingerprintKey``), never
+the value or a plain hash of it. Files that were not read (too large,
+symlinks, unreadable) are reported as WARN rather than skipped silently.
 """
 
 from __future__ import annotations
 
 import fnmatch
 import math
+import os
 import re
 import subprocess
 from collections import Counter
@@ -16,7 +21,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from baseline_check.findings import Finding, Status, fingerprint, redact
+from baseline_check.findings import Finding, FingerprintKey, Status, fingerprint, redact
 
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".terraform"}
 MAX_BYTES = 1_000_000
@@ -57,10 +62,21 @@ RULES = [
     ),
 ]
 
-# Values that look like secrets but are obviously placeholders.
-PLACEHOLDER = re.compile(
-    r"(?i)(example|changeme|placeholder|dummy|your[_-]|xxxx|\*\*\*\*|test|fake)"
+# Values that look like secrets but are obviously placeholders. Matched as
+# whole words split on punctuation, so "your-secret-here" is skipped but a
+# random string that happens to contain "test" is still reported.
+PLACEHOLDER_WORDS = frozenset(
+    {"example", "changeme", "placeholder", "dummy", "test", "fake", "sample", "redacted", "todo"}
 )
+PLACEHOLDER_SHAPES = re.compile(r"(?i)^your[_-]|xxxx|\*\*\*\*|<[^>]*>")
+
+
+def is_placeholder(value: str) -> bool:
+    if PLACEHOLDER_SHAPES.search(value):
+        return True
+    words = {w.lower() for w in re.split(r"[^A-Za-z0-9]+", value) if w}
+    return bool(words & PLACEHOLDER_WORDS)
+
 
 ENV_GLOBS = (
     ".env",
@@ -87,13 +103,32 @@ def _is_binary(chunk: bytes) -> bool:
     return b"\x00" in chunk
 
 
-def iter_files(root: Path) -> Iterator[Path]:
-    for path in sorted(root.rglob("*")):
-        rel = path.relative_to(root)
-        if any(part in SKIP_DIRS for part in rel.parts[:-1]) or rel.parts[0] in SKIP_DIRS:
-            continue
-        if path.is_file() and not path.is_symlink():
-            yield path
+def iter_files(root: Path, skipped: list[str] | None = None) -> Iterator[Path]:
+    """Regular files under ``root``, pruning SKIP_DIRS during the walk.
+
+    Symlinks are never followed (a link can point outside the checkout).
+    Their paths are appended to ``skipped`` so the caller can say so.
+    """
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        base = Path(dirpath)
+        keep = []
+        for d in sorted(dirnames):
+            if d in SKIP_DIRS:
+                continue
+            if (base / d).is_symlink():
+                if skipped is not None:
+                    skipped.append((base / d).relative_to(root).as_posix())
+                continue
+            keep.append(d)
+        dirnames[:] = keep
+        for name in sorted(filenames):
+            path = base / name
+            if path.is_symlink():
+                if skipped is not None:
+                    skipped.append(path.relative_to(root).as_posix())
+                continue
+            if path.is_file():
+                yield path
 
 
 def load_ignore(root: Path) -> set[str]:
@@ -116,33 +151,60 @@ def scan_text(text: str) -> Iterator[tuple[int, str, str]]:
             for m in rule.pattern.finditer(line):
                 value = m.group(rule.group)
                 if rule.min_entropy and (
-                    entropy(value) < rule.min_entropy or PLACEHOLDER.search(value)
+                    entropy(value) < rule.min_entropy or is_placeholder(value)
                 ):
                     continue
                 yield i, rule.name, value
 
 
-def scan_secrets(root: Path) -> list[Finding]:
+def scan_secrets(root: Path, key: FingerprintKey | None = None) -> list[Finding]:
+    key = key or FingerprintKey.random()
     ignored = load_ignore(root)
     findings: list[Finding] = []
-    for path in iter_files(root):
+    skipped: list[str] = []
+    too_big: list[str] = []
+    unreadable: list[str] = []
+    for path in iter_files(root, skipped):
+        rel = path.relative_to(root).as_posix()
         try:
             if path.stat().st_size > MAX_BYTES:
+                too_big.append(rel)
                 continue
             raw = path.read_bytes()
         except OSError:
+            unreadable.append(rel)
             continue
         if _is_binary(raw[:4096]):
             continue
         text = raw.decode("utf-8", errors="replace")
-        rel = path.relative_to(root).as_posix()
         for line, rule, value in scan_text(text):
-            if fingerprint(value) in ignored:
+            if fingerprint(value, key) in ignored:
                 continue
             findings.append(
-                Finding("SEC-01", Status.FAIL, f"{rule} {redact(value)}", f"{rel}:{line}")
+                Finding("SEC-01", Status.FAIL, f"{rule} {redact(value, key)}", f"{rel}:{line}")
             )
-    if not findings:
+    # A scanner that silently skips files reads as clean. Say what was not read.
+    for what, paths in (
+        (f"over {MAX_BYTES // 1_000_000} MB, not scanned", too_big),
+        ("symlinks, not followed", skipped),
+        ("unreadable", unreadable),
+    ):
+        if paths:
+            sample = ", ".join(paths[:3]) + (" ..." if len(paths) > 3 else "")
+            findings.append(
+                Finding("SEC-01", Status.WARN, f"{len(paths)} file(s) {what}: {sample}")
+            )
+    if ignored and not key.configured:
+        findings.append(
+            Finding(
+                "SEC-01",
+                Status.WARN,
+                ".baseline-ignore is present but BASELINE_FINGERPRINT_KEY is not set, "
+                "so fingerprints are per-run and no entries can match",
+                ".baseline-ignore",
+            )
+        )
+    if not any(f.status is Status.FAIL for f in findings):
         findings.append(Finding("SEC-01", Status.PASS, "no credential patterns in working tree"))
     return findings
 
@@ -163,6 +225,26 @@ def _matches_env(name: str) -> bool:
     return any(fnmatch.fnmatch(name, g) for g in ENV_GLOBS)
 
 
+def _ignored_by(name: str, patterns: list[str]) -> bool:
+    """Whether a root-level ``name`` ends up ignored, honouring ``!`` negations.
+
+    Only root ``.gitignore`` patterns that can apply to a top-level file are
+    considered; patterns scoped to a subdirectory (``config/.env``) do not
+    count as covering the root.
+    """
+    covered = False
+    for raw in patterns:
+        negate = raw.startswith("!")
+        pat = raw[1:] if negate else raw
+        pat = pat.lstrip("/").rstrip("/")
+        if "/" in pat.strip("*").strip("/"):
+            continue
+        pat = pat.removeprefix("**/")
+        if fnmatch.fnmatch(name, pat) or pat == name:
+            covered = not negate
+    return covered
+
+
 def scan_env_files(root: Path) -> list[Finding]:
     findings: list[Finding] = []
     tracked = tracked_files(root)
@@ -176,18 +258,14 @@ def scan_env_files(root: Path) -> list[Finding]:
             findings.append(Finding("SEC-02", Status.PASS, "no env or key files tracked"))
 
     gitignore = root / ".gitignore"
-    patterns = []
+    patterns: list[str] = []
     if gitignore.is_file():
         patterns = [
             ln.strip()
             for ln in gitignore.read_text(encoding="utf-8").splitlines()
-            if ln.strip() and not ln.startswith("#")
+            if ln.strip() and not ln.lstrip().startswith("#")
         ]
-    missing = [
-        want
-        for want in (".env", "*.pem", "*.key")
-        if not any(fnmatch.fnmatch(want, p.lstrip("/")) or p.lstrip("/") == want for p in patterns)
-    ]
+    missing = [want for want in (".env", "*.pem", "*.key") if not _ignored_by(want, patterns)]
     if missing:
         findings.append(
             Finding(

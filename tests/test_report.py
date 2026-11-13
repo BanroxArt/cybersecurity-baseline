@@ -1,7 +1,7 @@
 import json
 
 from baseline_check.controls import CONTROLS, Severity
-from baseline_check.findings import Finding, Status, redact
+from baseline_check.findings import Finding, FingerprintKey, Status, redact
 from baseline_check.report import roll_up, score, to_json, to_markdown, worst_failure
 
 
@@ -64,5 +64,12 @@ def test_markdown_escapes_and_lists_fixes():
 
 
 def test_redact_keeps_no_characters():
-    out = redact("abcdefghijklmnop")
+    out = redact("abcdefghijklmnop", FingerprintKey.random())
     assert "abcd" not in out and "len=16" in out
+
+
+def test_warns_are_called_out_next_to_the_score():
+    results = roll_up([Finding("GH-01", Status.WARN, "not visible")])
+    md = to_markdown(results, "x")
+    assert "could not be verified" in md
+    assert json.loads(to_json(results, "x"))["unverified"] == 1

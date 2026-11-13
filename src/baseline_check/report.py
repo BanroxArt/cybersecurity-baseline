@@ -5,6 +5,10 @@ critical 10). Only controls that were actually checked count. The score is
 passed weight over checked weight, as a percentage. WARN counts as half.
 It is a way to track your own progress between runs, not a grade to
 compare companies with.
+
+Because WARN earns half credit, a run with a weak token can score higher than
+the same setup with a FAIL. The report prints how many checked controls are
+unverified next to the score so that is visible.
 """
 
 from __future__ import annotations
@@ -71,6 +75,7 @@ def to_json(results: list[ControlResult], target: str) -> str:
         "target": target,
         "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "score": score(results),
+        "unverified": sum(1 for r in results if r.status == Status.WARN),
         "summary": {s.value: sum(1 for r in results if r.status == s) for s in Status},
         "controls": [
             {
@@ -103,6 +108,15 @@ def to_markdown(results: list[ControlResult], target: str) -> str:
         f"{counts[Status.FAIL]} fail, {counts[Status.WARN]} warn, {counts[Status.PASS]} pass, "
         f"{counts[Status.SKIP]} not checked.",
         "",
+        *(
+            [
+                f"{counts[Status.WARN]} control(s) could not be verified and earn half credit; "
+                "the score overstates them until a person confirms each one.",
+                "",
+            ]
+            if counts[Status.WARN]
+            else []
+        ),
         "This is a self-check against a short baseline. It is not a penetration test, an audit "
         "opinion or a certification.",
         "",

@@ -11,6 +11,7 @@ from baseline_check.checks.github import (
     DryRunTransport,
     FixtureTransport,
     GitHubError,
+    Transport,
     check_org,
     check_repo,
     transport_from_env,
@@ -19,13 +20,13 @@ from baseline_check.checks.secrets import scan_env_files, scan_secrets
 from baseline_check.checks.terraform import scan_terraform
 from baseline_check.checks.workflows import scan_workflows
 from baseline_check.controls import CONTROLS, Severity
-from baseline_check.findings import Finding
+from baseline_check.findings import Finding, FingerprintKey
 from baseline_check.report import roll_up, to_json, to_markdown, worst_failure
 
 
-def run_local(root: Path) -> list[Finding]:
+def run_local(root: Path, key: FingerprintKey | None = None) -> list[Finding]:
     findings: list[Finding] = []
-    findings += scan_secrets(root)
+    findings += scan_secrets(root, key)
     findings += scan_env_files(root)
     findings += scan_workflows(root)
     findings += scan_dockerfiles(root)
@@ -36,6 +37,7 @@ def run_local(root: Path) -> list[Finding]:
 def run_github(args: argparse.Namespace) -> tuple[list[Finding], list[str]]:
     if not (args.github_org or args.github_repo):
         return [], []
+    transport: Transport
     if args.dry_run:
         transport = DryRunTransport()
     elif args.fixtures:
@@ -65,7 +67,12 @@ def cmd_scan(args: argparse.Namespace) -> int:
         for r in requests:
             print(f"  GET {r}")
         return 0
-    results = roll_up(run_local(root) + gh_findings)
+    try:
+        key = FingerprintKey.from_env()
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    results = roll_up(run_local(root, key) + gh_findings)
     target = args.name or root.name
     text = to_json(results, target) if args.format == "json" else to_markdown(results, target)
     if args.output:
@@ -110,4 +117,5 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return args.func(args)
+    result: int = args.func(args)
+    return result
