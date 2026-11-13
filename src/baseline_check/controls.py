@@ -153,9 +153,11 @@ _CONTROLS = [
     Control(
         "CI-03",
         "ci",
-        "pull_request_target does not check out untrusted code",
+        "Privileged workflow triggers do not run untrusted PR code",
         Severity.CRITICAL,
-        "Use pull_request instead, or never check out the PR head in a pull_request_target job.",
+        "Use pull_request instead, or never check out or fetch the PR head in a "
+        "pull_request_target or workflow_run job. Treat artifacts from workflow_run as data, "
+        "never as code.",
         ("OpenSSF Scorecard Dangerous-Workflow",),
     ),
     Control(
@@ -200,7 +202,7 @@ _CONTROLS = [
     Control(
         "IAC-01",
         "iac",
-        "No storage buckets with public ACLs",
+        "No publicly readable storage buckets",
         Severity.HIGH,
         "Remove public-read ACLs and enable a public access block.",
     ),
