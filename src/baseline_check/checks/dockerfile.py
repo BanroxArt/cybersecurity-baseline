@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 from baseline_check.checks.secrets import SKIP_DIRS
@@ -41,21 +42,55 @@ def _image_pinned(image: str) -> bool:
     return name.rsplit(":", 1)[1] not in ("latest", "")
 
 
+def _assignments(op: str, args: str) -> list[tuple[str, bool]]:
+    """Names set by an ENV or ARG line, and whether each gets a value.
+
+    Handles ``ENV A=1 B="x y"`` (several pairs) and the legacy ``ENV A value``.
+    """
+    try:
+        tokens = shlex.split(args, posix=True)
+    except ValueError:
+        tokens = args.split()
+    if not tokens:
+        return []
+    if op == "ENV" and "=" not in tokens[0]:
+        return [(tokens[0], len(tokens) > 1)]
+    out = []
+    for tok in tokens:
+        name, eq, _ = tok.partition("=")
+        if name:
+            out.append((name, bool(eq)))
+    return out
+
+
 def check_dockerfile(path: Path, rel: str) -> list[Finding]:
     ins = instructions(path.read_text(encoding="utf-8", errors="replace"))
     out: list[Finding] = []
-    stages: set[str] = set()
-    last_user = None
+    # stage name -> USER in effect at the end of that stage
+    stage_users: dict[str, str | None] = {}
+    current: str | None = None
+    last_user: str | None = None
     for line, op, args in ins:
         loc = f"{rel}:{line}"
         if op == "FROM":
+            if current is not None:
+                stage_users[current] = last_user
             tokens = [t for t in args.split() if not t.startswith("--")]
             image = tokens[0] if tokens else ""
-            if len(tokens) >= 3 and tokens[1].lower() == "as":
-                stages.add(tokens[2].lower())
-            if image.lower() in stages or image == "scratch" or "$" in image:
+            current = tokens[2].lower() if len(tokens) >= 3 and tokens[1].lower() == "as" else None
+            if image.lower() in stage_users:
+                # Built on an earlier stage: inherits that stage's USER.
+                last_user = stage_users[image.lower()]
                 continue
-            last_user = None  # each stage starts as root again
+            # An external image or scratch starts as root as far as we can tell.
+            last_user = None
+            if image == "scratch":
+                continue
+            if "$" in image:
+                out.append(
+                    Finding("CT-02", Status.WARN, f"base image {image} comes from a build arg", loc)
+                )
+                continue
             if not _image_pinned(image):
                 out.append(Finding("CT-02", Status.FAIL, f"base image {image} not pinned", loc))
         elif op == "USER":
@@ -65,14 +100,16 @@ def check_dockerfile(path: Path, rel: str) -> list[Finding]:
         elif op == "RUN" and CURL_PIPE.search(args):
             out.append(Finding("CT-03", Status.FAIL, "remote script piped to a shell", loc))
         elif op in ("ENV", "ARG"):
-            name = re.split(r"[\s=]", args.strip(), maxsplit=1)[0]
-            has_value = "=" in args or (op == "ENV" and len(args.split()) > 1)
-            if SECRETISH.search(name) and (has_value or op == "ARG"):
-                out.append(
-                    Finding(
-                        "CT-04", Status.FAIL, f"{op} {name} looks like a secret in the image", loc
+            for name, has_value in _assignments(op, args):
+                if SECRETISH.search(name) and (has_value or op == "ARG"):
+                    out.append(
+                        Finding(
+                            "CT-04",
+                            Status.FAIL,
+                            f"{op} {name} looks like a secret in the image",
+                            loc,
+                        )
                     )
-                )
     if last_user in (None, "root", "0"):
         out.append(Finding("CT-01", Status.FAIL, "final stage runs as root", rel))
     else:

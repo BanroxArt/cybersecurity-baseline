@@ -65,3 +65,26 @@ def test_scan_finds_named_dockerfiles(tmp_path):
     (tmp_path / "node_modules" / "Dockerfile").write_text("FROM a\n")
     findings = scan_dockerfiles(tmp_path)
     assert {f.location for f in findings} == {"svc/api.Dockerfile"}
+
+
+def test_stage_from_build_arg_resets_user(tmp_path):
+    # Regression: FROM ${BASE} skipped the USER reset, so a root final stage
+    # inherited the previous stage's USER and passed CT-01.
+    got = run(
+        tmp_path,
+        "ARG BASE=python:3.12-slim\nFROM python:3.12-slim AS build\nUSER 10001\nFROM ${BASE}\n",
+    )
+    assert got["CT-01"] == [Status.FAIL]
+    assert got["CT-02"] == [Status.WARN]
+
+
+def test_stage_built_on_earlier_stage_inherits_its_user(tmp_path):
+    got = run(tmp_path, "FROM alpine:3.20 AS base\nUSER 10001\nFROM base\nRUN true\n")
+    assert got["CT-01"] == [Status.PASS]
+
+
+def test_env_with_several_pairs_checks_every_name(tmp_path):
+    got = run(tmp_path, 'FROM alpine:3.20\nENV A=1 DB_PASSWORD="x y"\nUSER app\n')
+    assert got["CT-04"] == [Status.FAIL]
+    got = run(tmp_path, "FROM alpine:3.20\nENV API_TOKEN abc\nUSER app\n")
+    assert got["CT-04"] == [Status.FAIL]
