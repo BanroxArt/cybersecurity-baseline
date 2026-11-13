@@ -12,8 +12,8 @@ import re
 from collections.abc import Iterator
 from pathlib import Path
 
-from baseline_audit.checks.secrets import SKIP_DIRS
-from baseline_audit.findings import Finding, Status
+from baseline_check.checks.secrets import SKIP_DIRS
+from baseline_check.findings import Finding, Status
 
 RESOURCE = re.compile(r'^\s*resource\s+"([^"]+)"\s+"([^"]+)"\s*\{', re.M)
 ADMIN_PORTS = {

@@ -1,4 +1,4 @@
-from baseline_audit.checks.github import (
+from baseline_check.checks.github import (
     DryRunTransport,
     FixtureTransport,
     GitHubError,
@@ -6,7 +6,7 @@ from baseline_audit.checks.github import (
     check_org,
     check_repo,
 )
-from baseline_audit.findings import Status
+from baseline_check.findings import Status
 
 
 def by_control(findings):

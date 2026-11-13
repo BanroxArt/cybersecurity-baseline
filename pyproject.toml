@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "baseline-audit"
+name = "baseline-check"
 version = "0.1.0"
-description = "Defensive baseline audit for a small team: committed secrets, GitHub org and repo settings, CI workflows, Dockerfiles and Terraform."
+description = "Defensive baseline check for a small team: committed secrets, GitHub org and repo settings, CI workflows, Dockerfiles and Terraform."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Art Akopian" }]
@@ -16,7 +16,7 @@ dependencies = ["PyYAML>=6"]
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [project.scripts]
-baseline-audit = "baseline_audit.cli:main"
+baseline-check = "baseline_check.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

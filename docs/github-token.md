@@ -1,16 +1,16 @@
-# GitHub token for baseline-audit
+# GitHub token for baseline-check
 
 1. GitHub > Settings > Developer settings > Fine-grained tokens > Generate new token.
 2. Resource owner: the org. Repository access: only the repos you want checked.
 3. Repository permissions: Administration read-only, Metadata read-only.
 4. Organization permissions: Administration read-only.
-5. Expiry: short. Seven days is plenty for a one-off audit.
+5. Expiry: short. Seven days is plenty for a one-off check.
 
 Then:
 
 ```sh
 read -rs GITHUB_TOKEN && export GITHUB_TOKEN
-baseline-audit scan . --github-org your-org --github-repo your-org/api
+baseline-check scan . --github-org your-org --github-repo your-org/api
 unset GITHUB_TOKEN
 ```
 

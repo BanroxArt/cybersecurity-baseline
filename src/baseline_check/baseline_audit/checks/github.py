@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from baseline_audit.findings import Finding, Status
+from baseline_check.findings import Finding, Status
 
 API = "https://api.github.com"
 
@@ -60,7 +60,7 @@ class UrllibTransport:
                 "Authorization": f"Bearer {self._token}",
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": "baseline-audit",
+                "User-Agent": "baseline-check",
             },
         )
         try:

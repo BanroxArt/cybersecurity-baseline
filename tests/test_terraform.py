@@ -1,5 +1,5 @@
-from baseline_audit.checks.terraform import blocks, check_tf, scan_terraform
-from baseline_audit.findings import Status
+from baseline_check.checks.terraform import blocks, check_tf, scan_terraform
+from baseline_check.findings import Status
 
 
 def controls(text):

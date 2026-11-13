@@ -1,8 +1,8 @@
 import json
 
-from baseline_audit.controls import CONTROLS, Severity
-from baseline_audit.findings import Finding, Status, redact
-from baseline_audit.report import roll_up, score, to_json, to_markdown, worst_failure
+from baseline_check.controls import CONTROLS, Severity
+from baseline_check.findings import Finding, Status, redact
+from baseline_check.report import roll_up, score, to_json, to_markdown, worst_failure
 
 
 def test_roll_up_worst_status_wins_and_unrun_is_skip():
@@ -57,7 +57,7 @@ def test_markdown_escapes_and_lists_fixes():
     md = to_markdown(
         roll_up([Finding("CT-03", Status.FAIL, "pipe | to sh", "Dockerfile:3")]), "svc"
     )
-    assert md.startswith("# Baseline audit: svc")
+    assert md.startswith("# Baseline check: svc")
     assert "not a penetration test" in md
     assert "### CT-03" in md
     assert "`Dockerfile:3`" in md

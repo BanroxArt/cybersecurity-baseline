@@ -17,6 +17,6 @@ check: lint test
 
 # Offline run against the recorded GitHub responses in tests/fixtures.
 demo:
-	$(PY) -m baseline_audit scan tests/fixtures/sample-repo \
+	$(PY) -m baseline_check scan tests/fixtures/sample-repo \
 		--github-org example-org --github-repo example-org/api \
 		--fixtures tests/fixtures/github --format md

@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from baseline_audit.checks.secrets import SKIP_DIRS
-from baseline_audit.findings import Finding, Status
+from baseline_check.checks.secrets import SKIP_DIRS
+from baseline_check.findings import Finding, Status
 
 SECRETISH = re.compile(r"(?i)(passw(or)?d|secret|token|api[_-]?key|private[_-]?key|access[_-]?key)")
 CURL_PIPE = re.compile(r"(?i)\b(curl|wget)\b[^|]*\|\s*(sudo\s+)?(ba|z)?sh\b")

@@ -13,8 +13,8 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from baseline_audit.controls import CONTROLS, Control, Severity
-from baseline_audit.findings import Finding, Status
+from baseline_check.controls import CONTROLS, Control, Severity
+from baseline_check.findings import Finding, Status
 
 ORDER = {Status.FAIL: 0, Status.WARN: 1, Status.PASS: 2, Status.SKIP: 3}
 
@@ -97,7 +97,7 @@ def to_markdown(results: list[ControlResult], target: str) -> str:
     s = score(results)
     counts = {st: sum(1 for r in results if r.status == st) for st in Status}
     lines = [
-        f"# Baseline audit: {target}",
+        f"# Baseline check: {target}",
         "",
         f"Score {s if s is not None else 'n/a'} / 100 over checked controls. "
         f"{counts[Status.FAIL]} fail, {counts[Status.WARN]} warn, {counts[Status.PASS]} pass, "

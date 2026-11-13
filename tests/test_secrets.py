@@ -1,7 +1,7 @@
 from conftest import fake_aws_key, fake_github_token, fake_private_key_header, git_add
 
-from baseline_audit.checks.secrets import entropy, scan_env_files, scan_secrets, scan_text
-from baseline_audit.findings import Status, fingerprint
+from baseline_check.checks.secrets import entropy, scan_env_files, scan_secrets, scan_text
+from baseline_check.findings import Status, fingerprint
 
 
 def statuses(findings, control):

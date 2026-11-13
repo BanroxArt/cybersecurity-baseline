@@ -14,7 +14,7 @@ from typing import Any
 
 import yaml
 
-from baseline_audit.findings import Finding, Status
+from baseline_check.findings import Finding, Status
 
 SHA_REF = re.compile(r"^[0-9a-f]{40}$")
 # Fields an outside contributor controls. Interpolating them into run: is

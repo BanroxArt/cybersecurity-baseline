@@ -1,6 +1,6 @@
 # cybersecurity-baseline
 
-`baseline-audit` checks a small team's own setup against a short security baseline and writes a scored report. It looks at a local checkout (committed credentials, tracked `.env` files, GitHub Actions workflows, Dockerfiles, Terraform) and, with a read-only token, at GitHub org and repo settings (2FA, branch protection, secret scanning, Dependabot, default token permissions).
+`baseline-check` checks a small team's own setup against a short security baseline and writes a scored report. It looks at a local checkout (committed credentials, tracked `.env` files, GitHub Actions workflows, Dockerfiles, Terraform) and, with a read-only token, at GitHub org and repo settings (2FA, branch protection, secret scanning, Dependabot, default token permissions).
 
 It is defensive and read-only. It does not scan anyone else's systems, does not exploit anything, and writes nothing to GitHub. It is also not a penetration test, an audit opinion or a certification of any kind.
 
@@ -14,10 +14,10 @@ Python 3.11+, PyYAML.
 
 ```sh
 python -m pip install -e '.[dev]'
-baseline-audit scan .                                  # local checks only
-baseline-audit scan . --format json -o report.json
-GITHUB_TOKEN=... baseline-audit scan . --github-org your-org --github-repo your-org/api
-baseline-audit scan . --github-org your-org --github-repo your-org/api --dry-run   # list API calls, send none
+baseline-check scan .                                  # local checks only
+baseline-check scan . --format json -o report.json
+GITHUB_TOKEN=... baseline-check scan . --github-org your-org --github-repo your-org/api
+baseline-check scan . --github-org your-org --github-repo your-org/api --dry-run   # list API calls, send none
 make demo                                              # offline run against recorded fixtures
 ```
 
@@ -25,7 +25,7 @@ Exit code is 1 when any failing control is at or above `--fail-on` (default `hig
 
 ## Controls
 
-`baseline-audit controls` prints the list. In short:
+`baseline-check controls` prints the list. In short:
 
 | Area | Controls |
 | --- | --- |
@@ -77,7 +77,7 @@ A fine-grained personal access token with read-only **Administration** on the or
 
 ## The agent skill
 
-Copy `SKILL.md` to `.cursor/skills/cybersecurity-baseline/SKILL.md` or your agent's equivalent. It runs `baseline-audit` where it can and covers the rest as an interview. [examples/sample-review.md](examples/sample-review.md) shows the report shape for a made-up company.
+Copy `SKILL.md` to `.cursor/skills/cybersecurity-baseline/SKILL.md` or your agent's equivalent. It runs `baseline-check` where it can and covers the rest as an interview. [examples/sample-review.md](examples/sample-review.md) shows the report shape for a made-up company.
 
 ## License
 

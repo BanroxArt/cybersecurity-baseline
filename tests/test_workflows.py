@@ -1,7 +1,7 @@
 import textwrap
 
-from baseline_audit.checks.workflows import check_workflow, scan_workflows
-from baseline_audit.findings import Status
+from baseline_check.checks.workflows import check_workflow, scan_workflows
+from baseline_check.findings import Status
 
 SHA = "11bd71901bbe5b1630ceea73d27597364c9af683"
 

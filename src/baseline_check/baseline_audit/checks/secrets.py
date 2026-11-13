@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from baseline_audit.findings import Finding, Status, fingerprint, redact
+from baseline_check.findings import Finding, Status, fingerprint, redact
 
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".terraform"}
 MAX_BYTES = 1_000_000

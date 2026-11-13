@@ -1,4 +1,4 @@
-"""baseline-audit command line."""
+"""baseline-check command line."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from baseline_audit.checks.dockerfile import scan_dockerfiles
-from baseline_audit.checks.github import (
+from baseline_check.checks.dockerfile import scan_dockerfiles
+from baseline_check.checks.github import (
     DryRunTransport,
     FixtureTransport,
     GitHubError,
@@ -15,12 +15,12 @@ from baseline_audit.checks.github import (
     check_repo,
     transport_from_env,
 )
-from baseline_audit.checks.secrets import scan_env_files, scan_secrets
-from baseline_audit.checks.terraform import scan_terraform
-from baseline_audit.checks.workflows import scan_workflows
-from baseline_audit.controls import CONTROLS, Severity
-from baseline_audit.findings import Finding
-from baseline_audit.report import roll_up, to_json, to_markdown, worst_failure
+from baseline_check.checks.secrets import scan_env_files, scan_secrets
+from baseline_check.checks.terraform import scan_terraform
+from baseline_check.checks.workflows import scan_workflows
+from baseline_check.controls import CONTROLS, Severity
+from baseline_check.findings import Finding
+from baseline_check.report import roll_up, to_json, to_markdown, worst_failure
 
 
 def run_local(root: Path) -> list[Finding]:
@@ -85,7 +85,7 @@ def cmd_controls(_: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="baseline-audit", description="Defensive baseline self-check.")
+    p = argparse.ArgumentParser(prog="baseline-check", description="Defensive baseline self-check.")
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("scan", help="scan a checkout and optionally GitHub settings")
     s.add_argument("path", nargs="?", default=".")

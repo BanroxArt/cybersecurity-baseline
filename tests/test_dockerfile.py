@@ -1,5 +1,5 @@
-from baseline_audit.checks.dockerfile import check_dockerfile, instructions, scan_dockerfiles
-from baseline_audit.findings import Status
+from baseline_check.checks.dockerfile import check_dockerfile, instructions, scan_dockerfiles
+from baseline_check.findings import Status
 
 
 def run(tmp_path, text):

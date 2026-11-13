@@ -1,6 +1,6 @@
 ---
 name: cybersecurity-baseline
-description: Run a defensive baseline security review for a small or mid-size software company, using the baseline-audit tool in this repo for what can be checked automatically (committed secrets, GitHub org and repo settings, CI workflows, Dockerfiles, Terraform) and an interview for the rest (identity, laptops, vendors, logging, incident path). Use when the user asks for a security checklist, a first-pass audit of their own systems, hardening, secrets handling, or "are we doing the obvious things". Only for systems the user owns or is authorized to review. No exploit instructions, attack playbooks, or help getting into anything.
+description: Run a defensive baseline security review for a small or mid-size software company, using the baseline-check tool in this repo for what can be checked automatically (committed secrets, GitHub org and repo settings, CI workflows, Dockerfiles, Terraform) and an interview for the rest (identity, laptops, vendors, logging, incident path). Use when the user asks for a security checklist, a first-pass review of their own systems, hardening, secrets handling, or "are we doing the obvious things". Only for systems the user owns or is authorized to review. No exploit instructions, attack playbooks, or help getting into anything.
 ---
 
 # Cybersecurity baseline review
@@ -23,8 +23,8 @@ Cloud accounts, source control, production apps, laptops, email and identity pro
 From a checkout of their repo:
 
 ```sh
-pip install baseline-audit   # or pip install -e . from this repo
-baseline-audit scan . --format md -o baseline.md
+pip install baseline-check   # or pip install -e . from this repo
+baseline-check scan . --format md -o baseline.md
 ```
 
 If they want the GitHub settings checked, have them create a read-only fine-grained token themselves (docs/github-token.md), export it in their own shell, and run with `--github-org` and `--github-repo`. Suggest `--dry-run` first so they can see every endpoint called. You never handle the token.

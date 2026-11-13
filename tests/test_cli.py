@@ -1,6 +1,6 @@
 import json
 
-from baseline_audit.cli import main
+from baseline_check.cli import main
 
 
 def test_sample_repo_offline(fixtures, capsys):
@@ -77,7 +77,7 @@ def test_missing_token_is_a_clean_error(tmp_path, capsys, monkeypatch):
 def test_output_file_and_controls_list(tmp_path, capsys):
     out = tmp_path / "r.md"
     main(["scan", str(tmp_path), "-o", str(out)])
-    assert out.read_text().startswith("# Baseline audit")
+    assert out.read_text().startswith("# Baseline check")
     assert main(["controls"]) == 0
     assert "SEC-01" in capsys.readouterr().out
 
