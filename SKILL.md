@@ -1,70 +1,73 @@
 ---
 name: cybersecurity-baseline
-description: Run a baseline cybersecurity review for a small or mid-size software company. Use when the user asks for a security checklist, a first-pass audit of their own systems, hardening advice, secrets handling, access control, logging, or “are we doing the obvious things.” Only review systems they own or are clearly authorized to test. Do not provide exploit instructions, attack playbooks, or help breaking into anything.
+description: Run a defensive baseline security review for a small or mid-size software company, using the baseline-audit tool in this repo for what can be checked automatically (committed secrets, GitHub org and repo settings, CI workflows, Dockerfiles, Terraform) and an interview for the rest (identity, laptops, vendors, logging, incident path). Use when the user asks for a security checklist, a first-pass audit of their own systems, hardening, secrets handling, or "are we doing the obvious things". Only for systems the user owns or is authorized to review. No exploit instructions, attack playbooks, or help getting into anything.
 ---
 
 # Cybersecurity baseline review
 
-Help the company find missing basics and fix them. This is a defensive review, not a penetration test and not a certification (it is not SOC 2, ISO 27001, or a PCI assessment).
+Help the team find the missing basics and fix them. This is not a penetration test and not a certification. Do not describe a pass as being SOC 2, ISO 27001 or PCI ready, and do not invent a grade.
 
-## Rules
+## Ground rules
 
-- Work only on systems the user owns or is authorized to review.
-- If asked for exploits, payloads, or “how an attacker would get in,” refuse the offensive part and stay on hardening.
-- Do not ask them to paste production secrets into the chat. If a secret appears, tell them to rotate it and treat the chat as compromised for that secret.
-- Do not invent a “you passed” grade. Use in place / partial / missing / not applicable.
+- Only systems the user owns or is authorized to review. If that is unclear, ask.
+- If asked for exploits, payloads or how an attacker would get in, decline that part and stay on hardening.
+- Never ask for secrets in the chat. If one appears, tell them to rotate it now and treat it as exposed.
+- Status words are in place, partial, missing, not applicable. Ask for evidence (a setting, a screenshot of a policy page, a log destination), and accept "we don't have that yet" without judgement.
 
-## How to work
+## Step 1: scope
 
-1. Establish scope: cloud accounts, source control, production apps, employee laptops, email, vendors, and whether they handle payments, health, or children’s data (those raise the bar).
-2. Walk the checklist below. Ask for evidence when a control is claimed (a setting, a policy, a log destination), but accept “we don’t have this yet.”
-3. Rank gaps by: (a) can cause a full account or data takeover, (b) are cheap to fix this week, (c) can wait.
-4. Hand back a 30-day hardening plan with owners.
+Cloud accounts, source control, production apps, laptops, email and identity provider, vendors with customer data. Ask whether they handle payments, health data or children's data; those raise the bar and usually bring a regulator or a partner's requirements, which take precedence.
 
-## Baseline checklist
+## Step 2: run the tool where it applies
 
-### Identity and access
+From a checkout of their repo:
 
-- [ ] SSO or a password manager plus unique accounts; no shared “admin@” passwords in a wiki
-- [ ] MFA on email, source control, cloud consoles, and production admin tools
-- [ ] Offboarding: access removed the day someone leaves; a named owner for that process
-- [ ] Least privilege on cloud IAM; no long-lived admin access keys on laptops
-- [ ] Periodic access review for production and customer-data tools (even quarterly is a start)
+```sh
+pip install baseline-audit   # or pip install -e . from this repo
+baseline-audit scan . --format md -o baseline.md
+```
 
-### Source code and secrets
+If they want the GitHub settings checked, have them create a read-only fine-grained token themselves (docs/github-token.md), export it in their own shell, and run with `--github-org` and `--github-repo`. Suggest `--dry-run` first so they can see every endpoint called. You never handle the token.
 
-- [ ] Private repositories; branch protection on the default branch; reviews for production changes
-- [ ] Secrets are not in git history. If they were, they have been rotated, not just deleted from HEAD
-- [ ] A secrets manager or at least platform-managed env vars in production; no `.env` files on servers
-- [ ] Dependency updates have an owner (Dependabot, Renovate, or a scheduled review)
-- [ ] CI credentials are scoped and not available to pull requests from forks unless that is understood and accepted
+Read the report with them. For every `fail`, confirm it is real before calling it a gap; for every `warn`, find out by hand. Note the tool's blind spots: secrets in git history (run gitleaks), rulesets-only branch protection, computed Terraform values.
 
-### Application and infrastructure
+## Step 3: interview for what the tool cannot see
 
-- [ ] HTTPS everywhere; HSTS; no accidental open admin routes
-- [ ] Security headers and cookie flags are intentional, not leftovers
-- [ ] Backups exist, are encrypted, and have been restored at least once
-- [ ] Production and development are separate; production data is not copied to laptops without a written rule
-- [ ] Public cloud storage buckets and similar objects are not world-readable by accident
-- [ ] Dependency and container base images are current enough to receive security patches
+Identity and access
+- SSO or a password manager, unique accounts, no shared admin logins
+- MFA on email, source control, cloud consoles, production admin tools; phishing-resistant (passkeys or hardware keys) for admins
+- Offboarding the same day, with a named owner
+- No long-lived admin cloud keys on laptops
+- Access review for production and customer-data tools, quarterly is fine to start
 
-### Logging, incidents, and vendors
+Secrets and production
+- Secrets manager or platform-managed env vars in production, no `.env` on servers
+- Anything ever committed has been rotated, not just deleted
+- Production and development separated; production data not copied to laptops without a written rule
+- Backups encrypted and restored at least once
 
-- [ ] Auth events, admin actions, and payments or account changes are logged and kept for a defined period
-- [ ] Someone actually looks at those logs, or an alert exists for obvious abuse (mass login failures, new admin, data export)
-- [ ] A one-page incident plan: who is called, who can take a system offline, how users are notified
-- [ ] Vendor list with data each vendor can see; contract or DPA where customer personal data is involved
-- [ ] Domain lock and email authentication (SPF, DKIM, DMARC) so the company is harder to spoof
+Logging and incidents
+- Auth events, admin actions, payment and account changes logged and kept for a stated period
+- Someone looks, or an alert exists for mass login failures, new admins, bulk exports
+- One-page incident plan: who gets called, who can take a system down, how users are told
+- SPF, DKIM, DMARC on the domain; registrar lock
 
-### People
+Vendors and people
+- Vendor list with what data each one sees and a DPA where personal data is involved
+- Laptops encrypted with auto-lock, a lost-device rule
+- Finance and support trained for payment-change and password-reset social engineering
 
-- [ ] Laptops disk-encrypted, auto-lock, and a rule for lost devices
-- [ ] Phishing-resistant habits for finance and support (wire changes, password resets, “CEO asked me to buy gift cards”)
+## Step 4: prioritise
+
+Rank gaps by: can lead to account or data takeover; cheap to fix this week; can wait. Expect the top of the list to be some of: 2FA not enforced, secrets in repos, write-default CI tokens or `pull_request_target` mistakes, shared admin accounts, no offboarding.
 
 ## Output format
 
-1. Scope
-2. Checklist with status and short evidence notes
-3. Top five gaps, in priority order, each with a fix that can start this week
-4. 30-day plan
-5. What this review does **not** cover (red team, physical security, formal compliance)
+1. Scope, and what was out of scope
+2. Tool results: score, failing controls, and which were confirmed by hand
+3. Interview checklist with status and evidence notes
+4. Top five gaps in order, each with a fix that can start this week and an owner
+5. 30-day plan
+6. What this review did not cover: red team, physical security, formal compliance, anything the user did not give access to
+
+See `examples/sample-review.md` for the shape.

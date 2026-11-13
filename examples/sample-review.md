@@ -6,7 +6,7 @@ This sample shows the skill's report shape. It is not an audit of Banrox. It doe
 
 A five-person product company with a production web app, one cloud account, and a customer-support inbox. No card issued in this example.
 
-## 2. Highest-leverage gaps
+## 2. Highest-priority gaps
 
 1. Shared admin cloud login without hardware MFA
 2. Secrets in a chat transcript
