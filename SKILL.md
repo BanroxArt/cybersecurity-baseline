@@ -29,7 +29,7 @@ baseline-check scan . --format md -o baseline.md
 
 If they want the GitHub settings checked, have them create a read-only fine-grained token themselves (docs/github-token.md), export it in their own shell, and run with `--github-org` and `--github-repo`. Suggest `--dry-run` first so they can see every endpoint called. You never handle the token.
 
-Read the report with them. For every `fail`, confirm it is real before calling it a gap; for every `warn`, find out by hand. Note the tool's blind spots: secrets in git history (run gitleaks), rulesets-only branch protection, computed Terraform values.
+Read the report with them. For every `fail`, confirm it is real before calling it a gap; for every `warn`, find out by hand. Note the tool's blind spots: secrets in git history (run gitleaks), ruleset bypass lists the token cannot see, computed Terraform values. Remind them the report itself is sensitive.
 
 ## Step 3: interview for what the tool cannot see
 
