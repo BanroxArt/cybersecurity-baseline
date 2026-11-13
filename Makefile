@@ -9,6 +9,7 @@ lint:
 	ruff check .
 	ruff format --check .
 	$(PY) scripts/check.py
+	$(PY) -m mypy
 
 test:
 	$(PY) -m pytest -q

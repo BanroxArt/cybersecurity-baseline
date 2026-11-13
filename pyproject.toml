@@ -13,13 +13,17 @@ requires-python = ">=3.11"
 dependencies = ["PyYAML>=6"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5"]
+hcl = ["python-hcl2>=7"]
+dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10", "hypothesis>=6.100", "types-PyYAML", "python-hcl2>=7"]
 
 [project.scripts]
 baseline-check = "baseline_check.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+baseline_check = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -33,3 +37,13 @@ target-version = "py311"
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 # The formatter handles wrapping; long string literals are left alone.
 ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["hcl2", "hcl2.*"]
+ignore_missing_imports = true
