@@ -1,10 +1,18 @@
+import urllib.request
+
+import pytest
+
 from baseline_check.checks.github import (
     DryRunTransport,
     FixtureTransport,
     GitHubError,
+    Response,
+    SameOriginRedirectHandler,
     UrllibTransport,
     check_org,
     check_repo,
+    transport_from_env,
+    validate_api_url,
 )
 from baseline_check.findings import Status
 
@@ -73,10 +81,14 @@ def test_dry_run_lists_requests_and_makes_no_findings():
     t = DryRunTransport()
     assert check_org(t, "acme") == []
     assert check_repo(t, "acme/app") == []
+    # Regression: this used to list /branches/main/protection whatever the
+    # repo's default branch was.
     assert t.requests == [
         "/orgs/acme",
         "/repos/acme/app",
-        "/repos/acme/app/branches/main/protection",
+        "/repos/acme/app/branches/{default_branch}/protection",
+        "/repos/acme/app/rules/branches/{default_branch}",
+        "/repos/acme/app/rulesets/{ruleset_id}",
         "/repos/acme/app/vulnerability-alerts",
         "/repos/acme/app/actions/permissions/workflow",
     ]
@@ -91,3 +103,100 @@ def test_transport_requires_token_and_hides_it():
         raise AssertionError("empty token accepted")
     t = UrllibTransport("not-a-real-token-value")
     assert "not-a-real" not in repr(t)
+
+
+def test_ruleset_only_repo_passes_branch_controls(fixtures):
+    # Regression: a branch protected only by a ruleset used to FAIL GH-10..13
+    # because classic protection answers 404.
+    t = FixtureTransport(fixtures / "github")
+    findings = check_repo(t, "example-org/ruled")
+    got = by_control(findings)
+    for cid in ("GH-10", "GH-11", "GH-12", "GH-13"):
+        assert got[cid] == [Status.PASS], cid
+    assert "rulesets" in next(f.message for f in findings if f.control == "GH-10")
+    assert "/repos/example-org/ruled/rulesets/42" in t.requests
+
+
+def test_ruleset_admin_bypass_fails_gh13_and_missing_deletion_rule_fails_gh12(fixtures):
+    got = by_control(check_repo(FixtureTransport(fixtures / "github"), "example-org/bypass"))
+    assert got["GH-10"] == [Status.PASS]
+    assert got["GH-11"] == [Status.PASS]
+    assert got["GH-12"] == [Status.FAIL]
+    assert got["GH-13"] == [Status.FAIL]
+
+
+def test_ruleset_bypass_list_not_visible_is_warn(fixtures):
+    got = by_control(check_repo(FixtureTransport(fixtures / "github"), "example-org/hidden"))
+    assert got["GH-12"] == [Status.PASS]
+    assert got["GH-13"] == [Status.WARN]
+
+
+def test_unreadable_rulesets_with_no_classic_rule_is_warn_not_fail():
+    def get(path):
+        if path == "/repos/o/r":
+            return Response(200, {"default_branch": "main"})
+        if path.endswith("/protection"):
+            return Response(404, {"message": "Branch not protected"})
+        if "/rules/branches/" in path:
+            return Response(403, {"message": "Resource not accessible"})
+        return Response(404, None)
+
+    got = by_control(check_repo(get, "o/r"))
+    for cid in ("GH-10", "GH-11", "GH-12", "GH-13"):
+        assert got[cid] == [Status.WARN], cid
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://api.github.com",
+        "ftp://api.github.com",
+        "https://",
+        "https://user:pw@ghe.example.com/api/v3",
+        "https://ghe.example.com/api/v3?x=1",
+        "https://ghe.example.com/api/v3#frag",
+        "api.github.com",
+    ],
+)
+def test_api_url_must_be_plain_https(url):
+    with pytest.raises(GitHubError):
+        validate_api_url(url)
+    with pytest.raises(GitHubError):
+        UrllibTransport("tok", url)
+
+
+def test_api_url_accepts_ghes_and_strips_slash():
+    assert validate_api_url("https://ghe.example.com/api/v3/") == "https://ghe.example.com/api/v3"
+
+
+def test_env_api_url_is_validated(monkeypatch):
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setenv("GITHUB_API_URL", "http://evil.example.com")
+    with pytest.raises(GitHubError):
+        transport_from_env()
+    monkeypatch.setenv("GITHUB_API_URL", "")
+    assert transport_from_env().base == "https://api.github.com"
+
+
+def _redirect(src, dst):
+    req = urllib.request.Request(src, headers={"Authorization": "Bearer s3kr1t-value"})
+    return SameOriginRedirectHandler().redirect_request(req, None, 302, "Found", {}, dst)
+
+
+@pytest.mark.parametrize(
+    "dst",
+    [
+        "https://evil.example.com/repos/o/r",
+        "http://api.github.com/repos/o/r",
+        "https://api.github.com:8443/repos/o/r",
+    ],
+)
+def test_cross_origin_redirect_is_refused(dst):
+    with pytest.raises(GitHubError) as exc:
+        _redirect("https://api.github.com/repos/o/r", dst)
+    assert "s3kr1t" not in str(exc.value)
+
+
+def test_same_origin_redirect_keeps_working():
+    new = _redirect("https://api.github.com/repos/o/old", "https://api.github.com/repos/o/new")
+    assert new is not None and new.full_url == "https://api.github.com/repos/o/new"

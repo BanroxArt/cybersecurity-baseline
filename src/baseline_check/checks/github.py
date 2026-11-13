@@ -6,6 +6,16 @@ with read-only "Administration" on the org and on the repos you want checked.
 Some org fields are only returned to owners; when they are missing the check
 reports WARN rather than guessing. Nothing here writes to GitHub.
 
+The token only ever goes to the configured API origin. ``GITHUB_API_URL``
+must be an ``https`` URL with no credentials, query or fragment, and
+redirects are followed only when they stay on the same scheme, host and port.
+urllib forwards the ``Authorization`` header on redirects by default, so a
+cross-host redirect would otherwise hand the token to whoever answered it.
+
+Branch protection is read from both places GitHub keeps it: classic branch
+protection and repository rulesets (``/rules/branches/{branch}``). A branch
+counts as protected if either source protects it.
+
 For tests and dry runs the HTTP layer is swappable. ``FixtureTransport``
 serves recorded JSON from a directory, ``DryRunTransport`` just records which
 requests would have been made.
@@ -18,6 +28,7 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -42,13 +53,54 @@ class GitHubError(RuntimeError):
     pass
 
 
+def validate_api_url(url: str) -> str:
+    """Return ``url`` without a trailing slash, or raise if a token must not go there."""
+    parts = urllib.parse.urlsplit(url.strip())
+    if parts.scheme != "https":
+        raise GitHubError("GITHUB_API_URL must use https")
+    if not parts.hostname:
+        raise GitHubError("GITHUB_API_URL has no host")
+    if parts.username or parts.password:
+        raise GitHubError("GITHUB_API_URL must not contain credentials")
+    if parts.query or parts.fragment:
+        raise GitHubError("GITHUB_API_URL must not have a query or fragment")
+    return urllib.parse.urlunsplit(parts._replace(path=parts.path.rstrip("/")))
+
+
+def _origin(url: str) -> tuple[str, str, int | None]:
+    parts = urllib.parse.urlsplit(url)
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    return parts.scheme, (parts.hostname or "").lower(), port
+
+
+class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follow redirects only within the origin the request started on."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        if _origin(newurl) != _origin(req.full_url):
+            raise GitHubError(
+                f"refusing {code} redirect to another origin "
+                f"({urllib.parse.urlsplit(newurl).hostname}); the token is not sent there"
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 class UrllibTransport:
     def __init__(self, token: str, base: str = API, timeout: float = 15.0) -> None:
         if not token:
             raise GitHubError("GITHUB_TOKEN is not set")
         self._token = token
-        self.base = base.rstrip("/")
+        self.base = validate_api_url(base)
         self.timeout = timeout
+        self._opener = urllib.request.build_opener(SameOriginRedirectHandler())
 
     def __repr__(self) -> str:  # keep the token out of logs and tracebacks
         return f"UrllibTransport(base={self.base!r})"
@@ -64,7 +116,7 @@ class UrllibTransport:
             },
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with self._opener.open(req, timeout=self.timeout) as resp:
                 raw = resp.read()
                 return Response(resp.status, json.loads(raw) if raw else None)
         except urllib.error.HTTPError as exc:
@@ -107,7 +159,7 @@ class DryRunTransport:
 
 def transport_from_env() -> UrllibTransport:
     return UrllibTransport(
-        os.environ.get("GITHUB_TOKEN", ""), os.environ.get("GITHUB_API_URL", API)
+        os.environ.get("GITHUB_TOKEN", ""), os.environ.get("GITHUB_API_URL") or API
     )
 
 
@@ -169,9 +221,12 @@ def check_repo(get: Transport, full_name: str) -> list[Finding]:
     loc = f"repo:{full_name}"
     r = get(f"/repos/{full_name}")
     if r.status == 0:
-        # Dry run: still walk the other endpoints so the request list is complete.
+        # Dry run: no response, so the default branch is unknown. List the
+        # endpoints with placeholders rather than guess "main".
         for p in (
-            "/branches/main/protection",
+            "/branches/{default_branch}/protection",
+            "/rules/branches/{default_branch}",
+            "/rulesets/{ruleset_id}",
             "/vulnerability-alerts",
             "/actions/permissions/workflow",
         ):
@@ -189,56 +244,159 @@ def check_repo(get: Transport, full_name: str) -> list[Finding]:
     return out
 
 
-def _protection(get: Transport, full_name: str, branch: str, loc: str) -> list[Finding]:
-    r = get(f"/repos/{full_name}/branches/{branch}/protection")
-    bloc = f"{loc}@{branch}"
-    if r.status == 404:
-        # 404 means no classic protection rule. Rulesets are a separate API and
-        # are reported as a limitation, see README.
-        fail = Finding("GH-10", Status.FAIL, "no branch protection rule on default branch", bloc)
-        return [fail] + [
-            Finding(c, Status.FAIL, "branch not protected", bloc)
-            for c in ("GH-11", "GH-12", "GH-13")
-        ]
+@dataclass(slots=True)
+class _Protection:
+    """What one source (classic protection or rulesets) says about a branch."""
+
+    source: str
+    reviews: int = 0
+    blocks_force_push: bool = False
+    blocks_deletion: bool = False
+    # True: admins cannot bypass. False: they can. None: could not tell.
+    admins_included: bool | None = None
+
+
+def _classic(r: Response) -> _Protection | None:
     if r.status != 200 or not isinstance(r.body, dict):
-        msg = (
-            "token cannot read branch protection"
-            if _denied(r)
-            else f"protection returned {r.status}"
-        )
-        return [Finding(c, Status.WARN, msg, bloc) for c in ("GH-10", "GH-11", "GH-12", "GH-13")]
+        return None
     p = r.body
-    out = [Finding("GH-10", Status.PASS, "default branch protected", bloc)]
     reviews = p.get("required_pull_request_reviews") or {}
-    count = int(reviews.get("required_approving_review_count") or 0)
+    return _Protection(
+        source="branch protection",
+        reviews=int(reviews.get("required_approving_review_count") or 0),
+        blocks_force_push=not (p.get("allow_force_pushes") or {}).get("enabled", False),
+        blocks_deletion=not (p.get("allow_deletions") or {}).get("enabled", False),
+        admins_included=bool((p.get("enforce_admins") or {}).get("enabled", False)),
+    )
+
+
+# Built-in repository role ids GitHub uses in ruleset bypass lists.
+_ADMIN_ROLE_IDS = {5}  # admin
+_ADMIN_ACTOR_TYPES = {"OrganizationAdmin", "EnterpriseOwner"}
+
+
+def _ruleset_admins_included(get: Transport, full_name: str, ids: set[int]) -> bool | None:
+    verdict: bool | None = True
+    for rid in sorted(ids):
+        r = get(f"/repos/{full_name}/rulesets/{rid}")
+        if r.status != 200 or not isinstance(r.body, dict):
+            verdict = None
+            continue
+        rs = r.body
+        if rs.get("enforcement") not in (None, "active"):
+            continue
+        actors = rs.get("bypass_actors")
+        if actors is None:
+            # Only returned to callers who can edit the ruleset.
+            verdict = None
+            continue
+        for a in actors:
+            if not isinstance(a, dict):
+                continue
+            if a.get("actor_type") in _ADMIN_ACTOR_TYPES or (
+                a.get("actor_type") == "RepositoryRole" and a.get("actor_id") in _ADMIN_ROLE_IDS
+            ):
+                return False
+    return verdict
+
+
+def _rulesets(get: Transport, full_name: str, branch: str, r: Response) -> _Protection | None:
+    if r.status != 200 or not isinstance(r.body, list):
+        return None
+    rules = [x for x in r.body if isinstance(x, dict)]
+    if not rules:
+        return _Protection(source="rulesets", admins_included=None)
+    prot = _Protection(source="rulesets")
+    ids: set[int] = set()
+    for rule in rules:
+        kind = rule.get("type")
+        if isinstance(rule.get("ruleset_id"), int):
+            ids.add(rule["ruleset_id"])
+        if kind == "pull_request":
+            params = rule.get("parameters") or {}
+            prot.reviews = max(
+                prot.reviews, int(params.get("required_approving_review_count") or 0)
+            )
+        elif kind == "non_fast_forward":
+            prot.blocks_force_push = True
+        elif kind == "deletion":
+            prot.blocks_deletion = True
+    prot.admins_included = _ruleset_admins_included(get, full_name, ids)
+    return prot
+
+
+def _protection(get: Transport, full_name: str, branch: str, loc: str) -> list[Finding]:
+    bloc = f"{loc}@{branch}"
+    classic_r = get(f"/repos/{full_name}/branches/{branch}/protection")
+    rules_r = get(f"/repos/{full_name}/rules/branches/{branch}")
+    classic = _classic(classic_r)
+    rulesets = _rulesets(get, full_name, branch, rules_r)
+    has_rules = rulesets is not None and (
+        rulesets.reviews or rulesets.blocks_force_push or rulesets.blocks_deletion
+    )
+    sources = [p for p in (classic, rulesets if has_rules else None) if p is not None]
+    # Could we see enough to say "unprotected"? Classic 404 is "no rule"; the
+    # rules endpoint answers 200 with an empty list when nothing applies.
+    classic_known = classic is not None or classic_r.status == 404
+    rules_known = rulesets is not None
+    controls = ("GH-10", "GH-11", "GH-12", "GH-13")
+
+    if not sources:
+        if classic_known and rules_known:
+            return [
+                Finding(
+                    "GH-10",
+                    Status.FAIL,
+                    "no branch protection rule or ruleset on default branch",
+                    bloc,
+                )
+            ] + [Finding(c, Status.FAIL, "branch not protected", bloc) for c in controls[1:]]
+        denied = _denied(classic_r) or _denied(rules_r)
+        msg = (
+            "token cannot read branch protection or rulesets"
+            if denied
+            else f"protection returned {classic_r.status}, rules returned {rules_r.status}"
+        )
+        return [Finding(c, Status.WARN, msg, bloc) for c in controls]
+
+    via = " and ".join(p.source for p in sources)
+    partial = "" if classic_known and rules_known else " (one source was not readable)"
+    out = [Finding("GH-10", Status.PASS, f"default branch protected by {via}{partial}", bloc)]
+
+    reviews = max(p.reviews for p in sources)
     out.append(
         Finding(
             "GH-11",
-            Status.PASS if count >= 1 else Status.FAIL,
-            f"{count} approving review(s) required",
+            Status.PASS if reviews >= 1 else Status.FAIL,
+            f"{reviews} approving review(s) required",
             bloc,
         )
     )
-    force = (p.get("allow_force_pushes") or {}).get("enabled", False)
-    delete = (p.get("allow_deletions") or {}).get("enabled", False)
-    if force or delete:
-        what = " and ".join(w for w, on in (("force pushes", force), ("deletions", delete)) if on)
-        out.append(Finding("GH-12", Status.FAIL, f"{what} allowed", bloc))
-    else:
+    force_ok = any(p.blocks_force_push for p in sources)
+    delete_ok = any(p.blocks_deletion for p in sources)
+    if force_ok and delete_ok:
         out.append(Finding("GH-12", Status.PASS, "force pushes and deletions blocked", bloc))
-    admins = (p.get("enforce_admins") or {}).get("enabled", False)
-    out.append(
-        Finding(
-            "GH-13",
-            Status.PASS if admins else Status.FAIL,
-            "admins included" if admins else "admins can bypass",
-            bloc,
+    else:
+        what = " and ".join(
+            w
+            for w, blocked in (("force pushes", force_ok), ("deletions", delete_ok))
+            if not blocked
         )
-    )
+        out.append(Finding("GH-12", Status.FAIL, f"{what} allowed", bloc))
+
+    admin = [p.admins_included for p in sources]
+    if any(a is True for a in admin):
+        out.append(Finding("GH-13", Status.PASS, "admins included", bloc))
+    elif any(a is None for a in admin):
+        out.append(
+            Finding("GH-13", Status.WARN, "ruleset bypass list not visible to this token", bloc)
+        )
+    else:
+        out.append(Finding("GH-13", Status.FAIL, "admins can bypass", bloc))
     return out
 
 
-def _security_analysis(repo: dict, loc: str, private: bool) -> list[Finding]:
+def _security_analysis(repo: dict[str, Any], loc: str, private: bool) -> list[Finding]:
     sa = repo.get("security_and_analysis")
     if not isinstance(sa, dict):
         return [

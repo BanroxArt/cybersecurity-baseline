@@ -1,0 +1,7 @@
+{
+  "status": 200,
+  "body": [
+    {"type": "pull_request", "ruleset_id": 7, "parameters": {"required_approving_review_count": 2}},
+    {"type": "non_fast_forward", "ruleset_id": 7}
+  ]
+}
