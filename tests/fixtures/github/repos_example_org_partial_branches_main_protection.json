@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "body": {
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 0
+    },
+    "enforce_admins": {
+      "enabled": false
+    },
+    "allow_force_pushes": {
+      "enabled": true
+    },
+    "allow_deletions": {
+      "enabled": false
+    }
+  }
+}

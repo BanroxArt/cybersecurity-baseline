@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "body": {
+    "full_name": "example-org/partial",
+    "private": true,
+    "default_branch": "main"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {
+    "login": "example-org",
+    "two_factor_requirement_enabled": false,
+    "members_can_create_public_repositories": true,
+    "default_repository_permission": "write"
+  }
+}

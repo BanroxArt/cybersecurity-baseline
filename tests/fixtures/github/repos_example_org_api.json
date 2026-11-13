@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "body": {
+    "full_name": "example-org/api",
+    "private": true,
+    "default_branch": "main",
+    "security_and_analysis": {
+      "secret_scanning": {
+        "status": "disabled"
+      },
+      "secret_scanning_push_protection": {
+        "status": "disabled"
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {
+    "login": "good-org",
+    "two_factor_requirement_enabled": true,
+    "members_can_create_public_repositories": false,
+    "default_repository_permission": "read"
+  }
+}
