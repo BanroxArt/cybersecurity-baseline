@@ -27,6 +27,7 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ### Added
 
+- `--format sarif`: SARIF 2.1.0 with one rule per control, `kind`/`level` mapped per the spec, `security-severity` for GitHub's buckets, relative `%SRCROOT%` locations and run-stable `partialFingerprints`. See docs/code-scanning.md.
 - Optional `python-hcl2` backend for Terraform (`pip install 'baseline-check[hcl]'`).
 - An "unverified" count next to the score in both report formats.
 - mypy (strict) in CI, a `py.typed` marker, and a Hypothesis test that the Terraform reader never raises.

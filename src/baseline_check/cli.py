@@ -22,6 +22,7 @@ from baseline_check.checks.workflows import scan_workflows
 from baseline_check.controls import CONTROLS, Severity
 from baseline_check.findings import Finding, FingerprintKey
 from baseline_check.report import roll_up, to_json, to_markdown, worst_failure
+from baseline_check.sarif import to_sarif
 
 
 def run_local(root: Path, key: FingerprintKey | None = None) -> list[Finding]:
@@ -74,7 +75,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
         return 2
     results = roll_up(run_local(root, key) + gh_findings)
     target = args.name or root.name
-    text = to_json(results, target) if args.format == "json" else to_markdown(results, target)
+    render = {"json": to_json, "md": to_markdown, "sarif": to_sarif}[args.format]
+    text = render(results, target)
     if args.output:
         Path(args.output).write_text(text, encoding="utf-8")
     else:
@@ -100,7 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--github-repo", action="append", metavar="OWNER/NAME")
     s.add_argument("--fixtures", help="serve GitHub API responses from this directory (offline)")
     s.add_argument("--dry-run", action="store_true", help="print the GitHub requests and exit")
-    s.add_argument("--format", choices=["md", "json"], default="md")
+    s.add_argument("--format", choices=["md", "json", "sarif"], default="md")
     s.add_argument("--name", help="target name shown in the report")
     s.add_argument("-o", "--output")
     s.add_argument(

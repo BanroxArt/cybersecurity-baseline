@@ -16,6 +16,7 @@ Python 3.11+, PyYAML. Optional: `python-hcl2` for Terraform parsing (`pip instal
 python -m pip install -e '.[dev]'
 baseline-check scan .                                  # local checks only
 baseline-check scan . --format json -o report.json
+baseline-check scan . --format sarif -o baseline.sarif   # GitHub code scanning, other SARIF viewers
 GITHUB_TOKEN=... baseline-check scan . --github-org your-org --github-repo your-org/api
 baseline-check scan . --github-org your-org --github-repo your-org/api --dry-run   # list API calls, send none
 make demo                                              # offline run against recorded fixtures
@@ -42,6 +43,8 @@ Why these and not a longer list: every item is something a team can check and fi
 ## Report
 
 Markdown by default, JSON with `--format json`. Each control gets `pass`, `fail`, `warn` (could not tell, a person should look) or `skip` (not checked). The score is passed severity weight over checked weight (low 1, medium 3, high 5, critical 10; warn counts half). It is for tracking your own progress between runs. Skipped controls do not count, so a repo with no Terraform is not penalised or rewarded for it. Because a `warn` earns half credit, the report says how many controls are unverified right under the score (`unverified` in JSON); a run with a weak token can otherwise look better than it is.
+
+SARIF 2.1.0 with `--format sarif`: one rule per control, one result per `fail` or `warn`, relative file locations, and fingerprints that stay stable across runs even with a random fingerprint key. [docs/code-scanning.md](docs/code-scanning.md) covers the mapping and a pinned upload workflow for GitHub code scanning.
 
 Treat the report itself as sensitive. It lists where credentials were found and how your org is configured.
 
