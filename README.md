@@ -85,6 +85,10 @@ A fine-grained personal access token with read-only **Administration** on the or
 
 Copy `SKILL.md` to `.cursor/skills/cybersecurity-baseline/SKILL.md` or your agent's equivalent. It runs `baseline-check` where it can and covers the rest as an interview. [examples/sample-review.md](examples/sample-review.md) shows the report shape for a made-up company.
 
+## Benchmarks
+
+Per-operation timings and how to reproduce them: [docs/benchmarks.md](docs/benchmarks.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE). Copyright 2026 Banrox Inc.

@@ -1,6 +1,6 @@
 PY ?= python3
 
-.PHONY: install lint test check demo
+.PHONY: bench install lint test check demo
 
 install:
 	$(PY) -m pip install -e '.[dev]'
@@ -21,3 +21,6 @@ demo:
 	$(PY) -m baseline_check scan tests/fixtures/sample-repo \
 		--github-org example-org --github-repo example-org/api \
 		--fixtures tests/fixtures/github --format md
+
+bench:
+	PYTHONPATH=src $(PY) bench/run.py
