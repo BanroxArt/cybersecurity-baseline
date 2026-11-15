@@ -8,13 +8,18 @@ version = "0.1.0"
 description = "Defensive baseline check for a small team: committed secrets, GitHub org and repo settings, CI workflows, Dockerfiles and Terraform."
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "Art Akopian" }]
+authors = [{ name = "Art Akopian", email = "opensource@banrox.com" }]
 requires-python = ">=3.11"
 dependencies = ["PyYAML>=6"]
 
 [project.optional-dependencies]
 hcl = ["python-hcl2>=7"]
 dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10", "hypothesis>=6.100", "types-PyYAML", "python-hcl2>=7"]
+
+
+[project.urls]
+Homepage = "https://banrox.com"
+Source = "https://github.com/BanroxArt/cybersecurity-baseline"
 
 [project.scripts]
 baseline-check = "baseline_check.cli:main"

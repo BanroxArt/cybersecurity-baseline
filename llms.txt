@@ -1,0 +1,35 @@
+# cybersecurity-baseline
+
+> A read-only security baseline check for a small team's own repos, GitHub settings, workflows, Dockerfiles and Terraform.
+
+`baseline-check` compares a local checkout and, with a read-only token, GitHub org and repo settings against a short baseline and writes a scored report in Markdown, JSON or SARIF 2.1.0. Controls cover committed credentials, org 2FA and branch protection, pinned and least-privilege GitHub Actions workflows, Dockerfiles and Terraform. Secret findings are reported as keyed HMAC fingerprints, not the secret itself. The tool writes nothing to GitHub. It is not a penetration test, an audit opinion or a certification.
+
+Built and maintained by Art Akopian, CEO of Banrox (https://banrox.com).
+
+## Docs
+
+- [README.md](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/README.md): Quick start, control list, report format and design decisions.
+- [docs/controls.md](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/docs/controls.md): Reasoning and public sources for each control.
+- [docs/code-scanning.md](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/docs/code-scanning.md): SARIF mapping and a pinned upload workflow for GitHub code scanning.
+- [docs/github-token.md](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/docs/github-token.md): Read-only token scopes and how the client uses them.
+- [docs/benchmarks.md](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/docs/benchmarks.md): Timeit measurements for the hot paths.
+- [SKILL.md](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/SKILL.md): Agent skill for a broader baseline review the tool cannot see.
+
+## Source
+
+- [cli.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/cli.py): Command-line entry: scan, controls, dry-run.
+- [controls.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/controls.py): Control catalogue, severities and skip rules.
+- [findings.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/findings.py): Finding records and keyed secret fingerprints.
+- [report.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/report.py): Markdown and JSON reports and the weighted score.
+- [sarif.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/sarif.py): SARIF 2.1.0 export.
+- [secrets.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/checks/secrets.py): Credential patterns and tracked env or key files.
+- [github.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/checks/github.py): Read-only org and repo setting checks.
+- [workflows.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/checks/workflows.py): Pinned actions, permissions and untrusted triggers.
+- [dockerfile.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/checks/dockerfile.py): Non-root final stage, pinned bases, no curl-pipe-shell.
+- [terraform.py](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/src/baseline_check/checks/terraform.py): Public buckets, open admin ports, encryption at rest.
+
+## Optional
+
+- [CHANGELOG](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/CHANGELOG.md): Notable changes.
+- [SECURITY](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/SECURITY.md): How to report a vulnerability.
+- [CONTRIBUTING](https://github.com/BanroxArt/cybersecurity-baseline/blob/main/CONTRIBUTING.md): How to propose a change.

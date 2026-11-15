@@ -6,7 +6,7 @@ It is defensive and read-only. It does not scan anyone else's systems, does not 
 
 The repo also contains `SKILL.md`, an agent skill for running a broader baseline review (people, vendors, incident path) that the tool cannot see.
 
-Author: Art Akopian ([Banrox](https://banrox.com))
+Built and maintained by Art Akopian, CEO of [Banrox](https://banrox.com). Banrox builds consumer credit and fraud-prevention software and publishes the general-purpose pieces.
 
 ## Quick start
 
